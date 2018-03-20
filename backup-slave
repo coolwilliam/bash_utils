@@ -1,0 +1,34 @@
+#!/bin/sh
+
+SSH_ADDR=192.168.108.122
+SSH_USER=root
+SSH_PWD=wayos123
+YEAR=`expr $(date -d "today" +"%Y") + 0`
+MONTH=`expr $(date -d "today" +"%m") + 0`
+TODAY=`expr $(date -d "today" +"%e") + 0`
+FILE=${YEAR}-${MONTH}-${TODAY}.tar.bz2
+TARGET=/usr/local/backup/$FILE
+DESTINATION=/usr/local/backup
+
+mkdir -p $DESTINATION
+
+/usr/bin/expect << EOF
+spawn scp $SSH_USER@$SSH_ADDR:$TARGET $DESTINATION
+expect {
+	"password:"
+		{
+			send "$SSH_PWD\n"
+		}
+	"密码："
+		{
+			send "$SSH_PWD\n"
+		}
+	"yes/no"
+	{
+		send "yes\n"
+	}
+}
+send "exit\n"
+expect eof
+EOF
+

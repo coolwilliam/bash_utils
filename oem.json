@@ -1,0 +1,28 @@
+{
+	"oem": {
+		"lao_yue": {
+			"host": "www.mmxiexunlian.com",
+			"port": 22,
+			"user_name": "root",
+			"password": "88djy@qq.com"
+		},
+		"lei_shu": {
+			"host": "120.24.153.91",
+			"port": 22,
+			"user_name": "root",
+			"password": "Thunderbit62804"
+		},
+		"wayos": {
+			"host": "122.228.236.117",
+			"port": 10022,
+			"user_name": "root",
+			"password": "wurui1027"
+		},
+		"bing_zhi": {
+			"host": "183.63.214.142",
+			"port": 22,
+			"user_name": "root",
+			"password": "YYFdjjf123"
+		}
+	}
+}

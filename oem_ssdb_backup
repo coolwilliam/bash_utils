@@ -1,0 +1,168 @@
+#!/bin/sh
+
+
+#获取当前脚本所在路径
+function get_cur_script_location()
+{
+	pwd_dir=`pwd`
+	location_dir=$(cd `dirname $0`; pwd)
+	cd  $pwd_dir
+	
+	echo "$location_dir"
+}
+
+#import module files---
+. $(get_cur_script_location)/json_function.sh
+. $(get_cur_script_location)/utils.sh
+#-----------------------
+
+#---global variables-----
+YEAR=`expr $(date -d "today" +"%Y") + 0`
+MONTH=`expr $(date -d "today" +"%m") + 0`
+TODAY=`expr $(date -d "today" +"%e") + 0`
+FILE=${YEAR}-${MONTH}-${TODAY}.tar.bz2
+TARGET=/usr/local/backup/$FILE
+DESTINATION=/usr/local/backup
+#-----------------------
+
+function main()
+{
+	local json_file=$(get_cur_script_location)/oem.json
+	
+	if [ ! -e $json_file ];then
+		echo "$json_file missing" >&2
+		exit
+	fi
+	
+	local json_content=`cat $json_file`
+	
+	local is_valid_json=`check_json "$json_content"`
+	if [ $is_valid_json != "true" ];then
+		echo "Invalid json file[$json_file]!" >&2
+		exit;
+	fi
+	
+	#检查json的成员
+	local member="oem"
+	local b_find=`has_member "$json_content" $member`
+	if [ $b_find != "true" ];then
+		echo "Can't find $member in $json_file" >&2
+		exit;
+	fi
+	
+	local oem_configs=`get_value "$json_content" $member`
+	local oem_size=`get_length "$oem_configs"`
+	local oem_keys=`get_keys "$oem_configs"`
+	
+	for ((i=0;i<$oem_size;i++));do
+		local oem_name=`get_value "$oem_keys" [$i]`
+		
+		local oem_config=`get_value "$oem_configs" $oem_name`
+		
+		#检查每个oem配置的成员
+		local members=(host port user_name password)
+		local check_success="true"
+		
+		for tkey in ${members[*]};do
+			local b_check=`has_member "$oem_config" $tkey`
+			if [ $b_check != "true" ];then
+				echo "Param[$tkey] missing in oem_config[$oem_name]" >&2
+				check_success="false"
+				break
+			fi
+		done
+		
+		#如果检查成员失败了 则进行下一个检查
+		if [ $check_success != "true" ];then
+			continue
+		fi
+		
+		#获取配置的参数，检查合法性
+		local ssh_user=`get_value "$oem_config" user_name`
+		param_type=`get_value_type "$oem_config" user_name`
+		ssh_user=`trim "$ssh_user"`
+		if [ -z "$ssh_user" -o $param_type != "string" ];then
+			continue
+		fi
+		
+		local ssh_password=`get_value "$oem_config" password`
+		param_type=`get_value_type "$oem_config" password`
+		ssh_password=`trim "$ssh_password"`
+		if [ -z "$ssh_password" -o $param_type != "string" ];then
+			continue
+		fi
+		
+		local ssh_host=`get_value "$oem_config" host`
+		param_type=`get_value_type "$oem_config" host`
+		ssh_host=`trim "$ssh_host"`
+		if [ -z "$ssh_host" -o $param_type != "string" ];then
+			continue
+		fi
+		
+		local ssh_port=`get_value "$oem_config" port`
+		param_type=`get_value_type "$oem_config" port`
+		ssh_port=`trim "$ssh_port"`
+		if [ -z "$ssh_port" -o $param_type != "number" ];then
+			continue
+		fi
+		
+		oem_name=`echo $oem_name|sed 's/\"//g'`
+		ssh_user=`echo $ssh_user|sed 's/\"//g'`
+		ssh_password=`echo $ssh_password|sed 's/\"//g'`
+		ssh_host=`echo $ssh_host|sed 's/\"//g'`
+		ssh_port=`echo $ssh_port|sed 's/\"//g'`
+		
+		#进行scp 操作
+		do_scp $oem_name $ssh_user $ssh_password $ssh_host $ssh_port
+		#echo "$oem_name $ssh_user $ssh_password $ssh_host"
+		
+	done
+}
+
+#通过scp命令从 oem的服务器将数据库备份文件拷贝到本地的备份目录
+#参数:
+#	oem_name
+#	ssh_user
+#	ssh_password
+#	ssh_host
+#	ssh_port
+#返回值 void
+function do_scp()
+{
+	local oem_name=$1
+	local ssh_user=$2
+	local ssh_password=$3
+	local ssh_host=$4
+	local ssh_port=$5
+	
+	local oem_dest=$DESTINATION/$oem_name
+	
+	mkdir -p $oem_dest
+
+	/usr/bin/expect << EOF
+	set timeout -1
+	spawn scp -P $ssh_port $ssh_user@$ssh_host:$TARGET $oem_dest
+	expect {
+		"password:"
+			{
+				send "$ssh_password\r"
+			}
+		"密码："
+			{
+				send "$ssh_password\r"
+			}
+		"yes/no"
+		{
+			send "yes\r"
+		}
+	}
+	expect "100%"
+	send "exit\n"
+	expect eof
+EOF
+
+}
+
+#开始任务
+main
+
